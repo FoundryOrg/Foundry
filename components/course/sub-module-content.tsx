@@ -36,9 +36,10 @@ export function SubModuleContent({ subModule }: SubModuleContentProps) {
             <Image 
               src={subModule.content.aiGeneratedImage} 
               alt={`${subModule.title} illustration`}
-              width={500}
-              height={192}
-              className="w-full h-48 object-cover rounded-lg"
+              width={800}
+              height={400}
+              unoptimized
+              className="w-full h-auto object-contain rounded-lg max-h-96"
             />
             <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs text-slate-600">
               AI Generated

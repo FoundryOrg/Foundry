@@ -106,7 +106,7 @@ export default function CoursePage() {
                 title: sm.title,
                 content: {
                   text: sm.body,
-                  aiGeneratedImage: "https://via.placeholder.com/400x200/4F46E5/FFFFFF?text=" + encodeURIComponent(sm.title)
+                  aiGeneratedImage: sm.image_url || "https://via.placeholder.com/400x200/4F46E5/FFFFFF?text=" + encodeURIComponent(sm.title)
                 }
               })),
               quiz: quizData

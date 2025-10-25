@@ -5,6 +5,9 @@ import json
 import os
 from dotenv import load_dotenv
 from supabase import create_client
+import google.generativeai as genai
+import base64
+from io import BytesIO
 
 load_dotenv()
 
@@ -110,10 +113,88 @@ async def claude_chat(request: dict):
             raise HTTPException(status_code=500, detail=f"Claude API error: {response.status_code} - {response.text}")
 
         data = response.json()
-        return {"content": data["content"][0]["text"], "usage": data.get("usage")}
+        return await image_gen(data)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Claude API error: {str(e)}")
+async def image_gen(claude_response: dict):
+
+    try:
+        course_content = claude_response["content"][0]["text"]
+        
+        clean_json = course_content
+        if '```json' in clean_json:
+            clean_json = clean_json.replace('```json', '').replace('```', '')
+        if '```' in clean_json:
+            clean_json = clean_json.replace('```', '')
+        
+        try:
+            course_data = json.loads(clean_json)
+        except json.JSONDecodeError:
+
+            return {"content": course_content, "usage": claude_response.get("usage")}
+        
+        # Configure Gemini
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_api_key:
+            print("GEMINI_API_KEY not configured, skipping image generation")
+            return {"content": course_content, "usage": claude_response.get("usage")}
+        
+        genai.configure(api_key=gemini_api_key)
+
+        model = genai.GenerativeModel('gemini-2.5-flash-image')
+        
+
+        for module in course_data.get("modules", []):
+            for submodule in module.get("subModules", []):
+                content = submodule.get("content", {})
+                
+
+                if content.get("aiGeneratedImage") == "placeholder":
+
+                    lesson_text = content.get("text", "")
+                    lesson_title = submodule.get("title", "")
+                    
+                    image_prompt = f"Professional educational illustration for: {lesson_title}. Context: {lesson_text[:150]}. Clean, modern style suitable for online learning."
+                    
+                    try:
+                        print(f"Generating image for: {lesson_title}")
+
+                        response = model.generate_content(image_prompt)
+                        
+
+                        image_found = False
+                        if hasattr(response, 'candidates') and response.candidates:
+                            for part in response.candidates[0].content.parts:
+                                if hasattr(part, 'inline_data') and part.inline_data:
+
+                                    img_data = part.inline_data.data
+                                    img_base64 = base64.b64encode(img_data).decode()
+                                    
+
+                                    content["aiGeneratedImage"] = f"data:image/png;base64,{img_base64}"
+                                    image_found = True
+                                    print(f"✓ Image generated for: {lesson_title}")
+                                    break
+                        
+                        if not image_found:
+                            print(f"No image data returned for: {lesson_title}, using placeholder")
+                            content["aiGeneratedImage"] = "https://placehold.co/600x400/3b82f6/ffffff?text=" + lesson_title.replace(' ', '+')
+                    
+                    except Exception as img_error:
+                        print(f"Error generating image for {lesson_title}: {str(img_error)}")
+
+                        content["aiGeneratedImage"] = "https://placehold.co/600x400/ef4444/ffffff?text=Generation+Failed"
+        
+
+        updated_content = json.dumps(course_data, indent=2)
+        return {"content": updated_content, "usage": claude_response.get("usage")}
+        
+    except Exception as e:
+        print(f"Image generation error: {str(e)}")
+
+        return {"content": claude_response["content"][0]["text"], "usage": claude_response.get("usage")}
+
 
 @app.post("/api/course/publish")
 async def publish_course(request: dict):
@@ -196,12 +277,16 @@ async def parse_and_store_course(course_data):
                     module_id = module_response.data[0]["id"]
 
                     for sub_idx, submodule in enumerate(module["subModules"]):
+                        # Get image URL from content if it exists
+                        image_url = submodule.get("content", {}).get("aiGeneratedImage", None)
+                        
                         supabase.table("submodules").insert({
                             "module_id": module_id,
                             "idx": sub_idx,
                             "kind": "instruction",
                             "title": submodule["title"],
-                            "body": submodule["content"]["text"]
+                            "body": submodule["content"]["text"],
+                            "image_url": image_url
                         }).execute()
                 
                     if module.get("quiz") and module["quiz"].get("questions"):
