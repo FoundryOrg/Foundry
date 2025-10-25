@@ -41,7 +41,7 @@ initial_prompt = """Create a course with this JSON structure:
           "id": "lesson-slug",
           "title": "Lesson Title",
           "content": {
-            "text": "Brief lesson content (1-2 sentences)",
+            "text": "5-6 sentences worth of lesson content",
             "aiGeneratedImage": "placeholder"
           }
         }
@@ -199,7 +199,7 @@ async def parse_and_store_course(course_data):
 
         supabase = get_supabase_client()
 
-        # Insert course
+
         course_response = supabase.table("courses").insert({
             "title": course_data["name"],
             "summary": f"Generated course: {course_data['name']}",
@@ -214,7 +214,7 @@ async def parse_and_store_course(course_data):
             course = course_response.data[0]
             course_id = course["id"]
             
-            # Insert modules
+
             for module_idx, module in enumerate(course_data["modules"]):
                 module_response = supabase.table("modules").insert({
                     "course_id": course_id,
@@ -225,8 +225,7 @@ async def parse_and_store_course(course_data):
                 
                 if module_response.data:
                     module_id = module_response.data[0]["id"]
-                    
-                    # Insert submodules
+
                     for sub_idx, submodule in enumerate(module["subModules"]):
                         supabase.table("submodules").insert({
                             "module_id": module_id,
@@ -235,8 +234,7 @@ async def parse_and_store_course(course_data):
                             "title": submodule["title"],
                             "body": submodule["content"]["text"]
                         }).execute()
-                    
-                    # Insert quiz if exists
+                
                     if module.get("quiz") and module["quiz"].get("questions"):
                         quiz_response = supabase.table("submodules").insert({
                             "module_id": module_id,
@@ -249,7 +247,6 @@ async def parse_and_store_course(course_data):
                         if quiz_response.data:
                             quiz_id = quiz_response.data[0]["id"]
                             
-                            # Insert quiz questions
                             for q_idx, question in enumerate(module["quiz"]["questions"]):
                                 supabase.table("quiz_questions").insert({
                                     "submodule_id": quiz_id,
@@ -287,13 +284,11 @@ async def getVoicePrompt(courseId: str):
         
         assessment_description = final_assessment.get("description", "Complete the final project")
         ar_instructions = final_assessment.get("arInstructions", [])
-        
 
         ar_text = ""
         if ar_instructions:
             ar_text = "AR Instructions:\n" + "\n".join([f"{i+1}. {instruction}" for i, instruction in enumerate(ar_instructions)])
         
-        # Create the voice prompt
         voice_prompt = f"""You are a helpful voice assistant with live video input from your user. The user said the prompt was "{title}", 
         and then supply the metadata that shows the instructions, and description for this final project.
 

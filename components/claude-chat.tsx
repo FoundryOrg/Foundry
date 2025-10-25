@@ -73,13 +73,7 @@ export function ClaudeChat() {
           {loading ? 'generating...' : 'Send to Claude'}
         </button>
       </form>
-      
-      {response && (
-        <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
-          <h3 className="font-semibold mb-2">Claude Response:</h3>
-          <p className="whitespace-pre-wrap">{response}</p>
-        </div>
-      )}
+    
     </div>
   )
 }

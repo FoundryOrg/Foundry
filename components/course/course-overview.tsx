@@ -8,7 +8,7 @@ interface CourseOverviewProps {
 }
 
 export function CourseOverview({ course, completedModules }: CourseOverviewProps) {
-  const totalModules = course.modules.length + 1 // +1 for Final Assessment
+  const totalModules = course.modules.length 
   const completedModulesCount = completedModules.length
   return (
     <div className="p-8 max-w-4xl mx-auto">
