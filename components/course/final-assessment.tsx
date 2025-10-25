@@ -1,5 +1,6 @@
 "use client"
 
+import { useParams } from "next/navigation"
 import type { FinalAssessment as FinalAssessmentType } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, ExternalLink, Zap } from "lucide-react"
@@ -11,7 +12,24 @@ interface FinalAssessmentProps {
 }
 
 export function FinalAssessment({ assessment, onComplete, completedModules = [] }: FinalAssessmentProps) {
-  const handleBeginAssessment = () => {
+  const params = useParams()
+  const courseId = params.id as string
+
+  const handleBeginAssessment = async () => {
+    try {
+      
+      // Fetch the voice prompt from the API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/course/${courseId}/voice-prompt`)
+      const data = await response.json()
+      
+      if (data.voice_prompt) {
+        console.log('Voice prompt:', data.voice_prompt)
+        // TRIGGER THE VOICE AGENT HERE THRU THE PROMPT
+      }
+    } catch (error) {
+      console.error('Error fetching voice prompt:', error)
+    }
+
     onComplete()
   }
   return (

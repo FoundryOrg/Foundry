@@ -18,7 +18,7 @@ export function CourseOverview({ course, completedModules }: CourseOverviewProps
           {course.name}
         </h1>
         <p className="text-lg text-slate-600 leading-relaxed">
-          Master the fundamentals of woodworking through structured learning modules and hands-on AR-guided projects.
+          Master the fundamentals through structured learning modules and hands-on AR-guided projects.
         </p>
       </div>
 

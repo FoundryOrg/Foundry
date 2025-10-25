@@ -266,6 +266,46 @@ async def parse_and_store_course(course_data):
     except Exception as e:
         raise e
 
+@app.get("/api/course/{courseId}/voice-prompt")
+async def getVoicePrompt(courseId: str):
+    try:
+        supabase = get_supabase_client()
+        response = supabase.table("courses").select("title, meta").eq("id", courseId).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Course not found")
+        
+        course = response.data[0]
+        meta = course.get("meta", {})
+        title = course.get("title", "Unknown Course")
+        
+        final_assessment = meta.get("finalAssessment", {})
+        
+        ## optional below, may not affect prompt too much
+        #if learning_objectives: 
+           # objectives_text = "Learning objectives:\n" + "\n".join([f"- {obj}" for obj in learning_objectives]) 
+        
+        assessment_description = final_assessment.get("description", "Complete the final project")
+        ar_instructions = final_assessment.get("arInstructions", [])
+        
+
+        ar_text = ""
+        if ar_instructions:
+            ar_text = "AR Instructions:\n" + "\n".join([f"{i+1}. {instruction}" for i, instruction in enumerate(ar_instructions)])
+        
+        # Create the voice prompt
+        voice_prompt = f"""You are a helpful voice assistant with live video input from your user. The user said the prompt was "{title}", 
+        and then supply the metadata that shows the instructions, and description for this final project.
+
+        Final project description: {assessment_description}
+
+        {ar_text}"""
+        
+        return {"voice_prompt": voice_prompt}
+                
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating voice prompt: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
