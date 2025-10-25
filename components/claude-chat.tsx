@@ -19,6 +19,7 @@ export function ClaudeChat() {
       })
       
       const data = await res.json()
+
       setResponse(data.content)
 
       try {
@@ -31,11 +32,13 @@ export function ClaudeChat() {
         const storeData = await storeRes.json()
         console.log('Store response:', storeData) 
         
-        
+
       } catch (storeError) {
         console.error('Store error:', storeError)
+        setResponse(prev => prev + `\n\n❌ Store error: ${storeError}`)
       }
     } catch (error) {
+      console.error('Main error:', error)
       setResponse('Error: ' + error)
     }
     

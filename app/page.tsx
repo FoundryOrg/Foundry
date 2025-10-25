@@ -1,6 +1,6 @@
 import Image from "next/image";
-import { supabase } from "../../utils/supabase";
-import { ClaudeChat } from "../../components/claude-chat";
+import { supabase } from "../utils/supabase";
+import { ClaudeChat } from "../components/claude-chat";
 
 export default function Home() {
   return (
