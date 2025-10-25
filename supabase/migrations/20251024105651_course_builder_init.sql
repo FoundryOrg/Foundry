@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 CREATE TABLE profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   username TEXT UNIQUE NOT NULL,
@@ -13,6 +11,7 @@ CREATE TABLE courses (
   title TEXT NOT NULL,
   summary TEXT,
   meta JSONB, -- Additional metadata
+  is_published BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -72,6 +71,7 @@ CREATE TABLE question_progress (
 
 
 CREATE INDEX idx_courses_owner_id ON courses(owner_id);
+CREATE INDEX idx_courses_is_published ON courses(is_published);
 CREATE INDEX idx_modules_course_id ON modules(course_id);
 CREATE INDEX idx_submodules_module_id ON submodules(module_id);
 CREATE INDEX idx_quiz_questions_submodule_id ON quiz_questions(submodule_id);
@@ -92,6 +92,7 @@ ALTER TABLE question_progress ENABLE ROW LEVEL SECURITY;
 -- Basic RLS policies (adjust as needed)
 CREATE POLICY "Allow all operations on profiles" ON profiles FOR ALL USING (true);
 CREATE POLICY "Allow all operations on courses" ON courses FOR ALL USING (true);
+CREATE POLICY "Allow reading published courses" ON courses FOR SELECT USING (is_published = true);
 CREATE POLICY "Allow all operations on modules" ON modules FOR ALL USING (true);
 CREATE POLICY "Allow all operations on submodules" ON submodules FOR ALL USING (true);
 CREATE POLICY "Allow all operations on quiz_questions" ON quiz_questions FOR ALL USING (true);

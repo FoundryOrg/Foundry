@@ -38,6 +38,7 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          is_published: boolean | null
           meta: Json | null
           owner_id: string | null
           summary: string | null
@@ -47,6 +48,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
+          is_published?: boolean | null
           meta?: Json | null
           owner_id?: string | null
           summary?: string | null
@@ -56,6 +58,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
+          is_published?: boolean | null
           meta?: Json | null
           owner_id?: string | null
           summary?: string | null

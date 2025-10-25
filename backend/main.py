@@ -25,22 +25,12 @@ def get_supabase_client():
     return create_client(url, key)
 
 
-initial_prompt = """# Course Generation System Prompt
+initial_prompt = """Create a course with this JSON structure:
 
-You are an expert course designer tasked with creating comprehensive educational courses. Generate a complete course structure following this EXACT JSON format:
-
-## Required Structure
-
-```json
 {
   "id": "course-slug",
   "name": "Course Name",
-  "learningObjectives": [
-    "Objective 1",
-    "Objective 2", 
-    "Objective 3",
-    "Objective 4"
-  ],
+  "learningObjectives": ["Goal 1", "Goal 2", "Goal 3", "Goal 4"],
   "modules": [
     {
       "id": "module-slug",
@@ -48,108 +38,75 @@ You are an expert course designer tasked with creating comprehensive educational
       "isSafetyCheck": false,
       "subModules": [
         {
-          "id": "submodule-slug",
+          "id": "lesson-slug",
           "title": "Lesson Title",
           "content": {
-            "text": "Detailed lesson content (2-3 sentences explaining key concepts)",
-            "aiGeneratedImage": "https://via.placeholder.com/400x200/4F46E5/FFFFFF?text=Lesson+Title"
-          }
-        },
-        {
-          "id": "submodule-slug-2", 
-          "title": "Lesson Title 2",
-          "content": {
-            "text": "Detailed lesson content",
-            "aiGeneratedImage": "https://via.placeholder.com/400x200/059669/FFFFFF?text=Lesson+Title+2"
-          }
-        },
-        {
-          "id": "submodule-slug-3",
-          "title": "Lesson Title 3", 
-          "content": {
-            "text": "Detailed lesson content",
-            "aiGeneratedImage": "https://via.placeholder.com/400x200/DC2626/FFFFFF?text=Lesson+Title+3"
+            "text": "Brief lesson content (1-2 sentences)",
+            "aiGeneratedImage": "placeholder"
           }
         }
       ],
       "quiz": {
-        "id": "module-quiz-slug",
+        "id": "quiz-slug",
         "questions": [
           {
-            "id": "question-slug-1",
-            "question": "Multiple choice question?",
-            "options": ["Option A", "Option B", "Option C", "Option D"],
-            "correctAnswer": 0, reasoning behind the correct answer, and why the other options are wrong (this should stay in the correctAnswer column)
-          },
-          {
-            "id": "question-slug-2", 
-            "question": "Another question?",
-            "options": ["Option A", "Option B", "Option C", "Option D"],
-            "correctAnswer": 2, reasoning behind the correct answer, and why the other options are wrong (this should stay in the correctAnswer column)
+            "id": "q1",
+            "question": "Question text?",
+            "options": ["A", "B", "C", "D"],
+            "correctAnswer": 0
           }
         ]
       }
     }
   ],
   "finalAssessment": {
-    "title": "AR-Guided Project Title",
-    "description": "Detailed description of the final hands-on project (2-3 sentences)",
-    "arInstructions": [
-      "Step 1 instruction",
-      "Step 2 instruction", 
-      "Step 3 instruction",
-      "Step 4 instruction",
-      "Step 5 instruction"
-    ],
+    "title": "Final Project",
+    "description": "Project description",
+    "arInstructions": ["Step 1", "Step 2", "Step 3"],
     "metaRayBansIntegration": true
   },
   "createdAt": "2024-01-01T00:00:00.000Z"
 }
-```
 
-## Requirements
-
-### Course Structure:
-- **3 modules minimum** (can be more)
-- **3 sub-modules per module** (exactly 3 lessons)
-- **2 quiz questions per module** (minimum)
-- **1 final AR-guided assessment**
-
-### ID Formatting:
-- Use kebab-case: `"safety-checks"`, `"basic-tools"`
-- Be descriptive but concise
-- Ensure uniqueness
-
-### Content Guidelines:
-- **Learning Objectives**: 4 clear, measurable goals
-- **Lesson Content**: 1 detailed paragraphs (100-200 words) explaining key concepts with:
-  - Comprehensive explanations of concepts
-  - Real-world examples and applications
-  - Step-by-step procedures where applicable
-  - Safety considerations and warnings
-  - Common mistakes and how to avoid them
-  - Best practices and tips
-- **Quiz Questions**: Test understanding of module concepts
-- **AR Instructions**: 5 step-by-step instructions for final project
-
-### Safety Considerations:
-- Set `"isSafetyCheck": true` for safety-related modules
-- Include safety protocols in relevant lessons
-- Emphasize safety in AR instructions
-
-## Example Output Format
-
-Generate ONLY the JSON object, no additional text or explanations. The JSON should be valid and ready to use directly in the application.
-
-## User Prompt Integration
-
-When given a user prompt like "Create a course about [TOPIC]", structure the course around that topic while following all the requirements above.
+Requirements: 3 modules, 3 lessons each, 2 quiz questions per module. Use kebab-case IDs. Generate ONLY valid JSON.
 
 Create a course about: """
 
 @app.get("/")
 def read_root():
     return {"message": "Foundry Course Builder API"}
+
+@app.post("/api/generate-image")
+async def generate_image(request: dict):
+    try:
+        prompt = request.get("prompt")
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Prompt is required")
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/images/generations",
+                headers={
+                    "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "dall-e-3",
+                    "prompt": f"Professional educational illustration: {prompt}. Clean, modern, suitable for online learning.",
+                    "n": 1,
+                    "size": "1024x1024",
+                    "quality": "standard"
+                },
+            )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"OpenAI API error: {response.status_code} - {response.text}")
+
+        data = response.json()
+        return {"image_url": data["data"][0]["url"]}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image generation error: {str(e)}")
 
 @app.post("/api/claude")
 async def claude_chat(request: dict):
@@ -168,7 +125,7 @@ async def claude_chat(request: dict):
                 },
                 json={
                     "model": "claude-sonnet-4-20250514",
-                    "max_tokens": 8000,
+                    "max_tokens": 4000,
                     "messages": [
                         {
                             "role": "user",
@@ -188,6 +145,28 @@ async def claude_chat(request: dict):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Claude API error: {str(e)}")
+
+@app.post("/api/course/publish")
+async def publish_course(request: dict):
+    try:
+        course_id = request.get("courseId")
+        if not course_id:
+            raise HTTPException(status_code=400, detail="courseId is required")
+        
+        supabase = get_supabase_client()
+        
+
+        response = supabase.table("courses").update({
+            "is_published": True
+        }).eq("id", course_id).execute()
+        
+        if response.data:
+            return {"success": True, "message": "Course published successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Course not found")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to publish course: {str(e)}")
 
 @app.post("/api/course")
 async def parse_course(request: dict):
@@ -224,7 +203,11 @@ async def parse_and_store_course(course_data):
         course_response = supabase.table("courses").insert({
             "title": course_data["name"],
             "summary": f"Generated course: {course_data['name']}",
-
+            "is_published": False,
+            "meta": {
+                "learningObjectives": course_data.get("learningObjectives", []),
+                "finalAssessment": course_data.get("finalAssessment", {})
+            }
         }).execute()
         
         if course_response.data:
@@ -250,7 +233,7 @@ async def parse_and_store_course(course_data):
                             "idx": sub_idx,
                             "kind": "instruction",
                             "title": submodule["title"],
-                            "body": submodule["content"]["text"],
+                            "body": submodule["content"]["text"]
                         }).execute()
                     
                     # Insert quiz if exists

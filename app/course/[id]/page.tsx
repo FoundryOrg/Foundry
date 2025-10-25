@@ -1,15 +1,17 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { CourseSidebar } from "@/components/course/course-sidebar"
 import { CourseContent } from "@/components/course/course-content"
 import { QuizModal } from "@/components/ui/quiz-modal"
-import { MOCK_COURSE } from "@/lib/mock-data"
+import { Button } from "@/components/ui/button"
 import { ActiveView, Module, SubModule } from "@/lib/types"
+import { supabase } from "@/utils/supabase"
 
 export default function CoursePage() {
   const router = useRouter()
+  const params = useParams()
   const [activeView, setActiveView] = useState<ActiveView>('overview')
   const [activeModule, setActiveModule] = useState<Module | undefined>(undefined)
   const [activeSubModule, setActiveSubModule] = useState<SubModule | undefined>(undefined)
@@ -17,8 +19,153 @@ export default function CoursePage() {
   const [completedSubModules, setCompletedSubModules] = useState<string[]>([])
   const [isQuizOpen, setIsQuizOpen] = useState(false)
   const [currentQuiz, setCurrentQuiz] = useState<Module | undefined>(undefined)
+  const [isPublished, setIsPublished] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [course, setCourse] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Fetch course data and check publication status
+  useEffect(() => {
+    const fetchCourseData = async () => {
+      if (!params.id) return
+
+      try {
+        // Fetch course basic info
+        const { data: courseData, error: courseError } = await supabase
+          .from('courses')
+          .select('*')
+          .eq('id', params.id)
+          .single()
+
+        if (courseError) {
+          console.error('Error fetching course:', courseError)
+          return
+        }
+
+        setIsPublished(courseData.is_published)
+
+        // Fetch modules
+        const { data: modulesData, error: modulesError } = await supabase
+          .from('modules')
+          .select('*')
+          .eq('course_id', params.id)
+          .order('idx')
+
+        if (modulesError) {
+          console.error('Error fetching modules:', modulesError)
+          return
+        }
+
+        // Fetch submodules and quiz questions for each module
+        const modulesWithContent = await Promise.all(
+          modulesData.map(async (module) => {
+            // Fetch submodules
+            const { data: submodulesData, error: submodulesError } = await supabase
+              .from('submodules')
+              .select('*')
+              .eq('module_id', module.id)
+              .order('idx')
+
+            if (submodulesError) {
+              console.error('Error fetching submodules:', submodulesError)
+              return { ...module, subModules: [], quiz: null }
+            }
+
+            // Separate instruction submodules from quiz submodules
+            const instructionSubmodules = submodulesData.filter(sm => sm.kind === 'instruction')
+            const quizSubmodules = submodulesData.filter(sm => sm.kind === 'quiz')
+
+            // Fetch quiz questions for quiz submodules
+            let quizData = null
+            if (quizSubmodules.length > 0) {
+              const { data: questionsData, error: questionsError } = await supabase
+                .from('quiz_questions')
+                .select('*') 
+                .eq('submodule_id', quizSubmodules[0].id)
+                .order('idx')
+
+              if (!questionsError && questionsData && questionsData.length > 0) {
+                quizData = {
+                  id: quizSubmodules[0].id,
+                  questions: questionsData.map(q => ({
+                    id: q.id,
+                    question: q.prompt,
+                    options: q.options,
+                    correctAnswer: parseInt(q.answer)
+                  }))
+                }
+              }
+            }
+
+            return {
+              id: module.id,
+              title: module.title,
+              isSafetyCheck: false, // We can add this field later if needed
+              subModules: instructionSubmodules.map(sm => ({
+                id: sm.id,
+                title: sm.title,
+                content: {
+                  text: sm.body,
+                  aiGeneratedImage: "https://via.placeholder.com/400x200/4F46E5/FFFFFF?text=" + encodeURIComponent(sm.title)
+                }
+              })),
+              quiz: quizData
+            }
+          })
+        )
+
+        // Create course object in the expected format
+        const courseObject = {
+          id: courseData.id,
+          name: courseData.title,
+          learningObjectives: courseData.meta?.learningObjectives || [],
+          modules: modulesWithContent,
+          finalAssessment: courseData.meta?.finalAssessment || {
+            title: "Final Assessment",
+            description: "Complete the final assessment to finish this course.",
+            arInstructions: [],
+            metaRayBansIntegration: false
+          },
+          createdAt: courseData.created_at
+        }
+
+        setCourse(courseObject)
+      } catch (error) {
+        console.error('Error fetching course data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCourseData()
+  }, [params.id])
+
+  const handlePublish = async () => {
+    setPublishing(true)
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/course/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: params.id })
+      })
+
+      if (response.ok) {
+        setIsPublished(true)
+        alert('Course published successfully!')
+      } else {
+        alert('Failed to publish course')
+      }
+    } catch (error) {
+      console.error('Error publishing course:', error)
+      alert('Failed to publish course')
+    } finally {
+      setPublishing(false)
+    }
+  }
 
   const handleModuleSelect = (moduleId: string) => {
+    if (!course) return
+
     if (moduleId === 'overview') {
       setActiveView('overview')
       setActiveModule(undefined)
@@ -29,14 +176,14 @@ export default function CoursePage() {
       setActiveSubModule(undefined)
     } else if (moduleId.endsWith('-quiz')) {
       const actualModuleId = moduleId.replace('-quiz', '')
-      const selectedModule = MOCK_COURSE.modules.find(m => m.id === actualModuleId)
+      const selectedModule = course.modules.find((m: any) => m.id === actualModuleId)
       if (selectedModule) {
         setActiveView('quiz')
         setActiveModule(selectedModule)
         setActiveSubModule(undefined)
       }
     } else {
-      const selectedModule = MOCK_COURSE.modules.find(m => m.id === moduleId)
+      const selectedModule = course.modules.find((m: any) => m.id === moduleId)
       if (selectedModule) {
         setActiveView('module')
         setActiveModule(selectedModule)
@@ -46,8 +193,10 @@ export default function CoursePage() {
   }
 
   const handleSubModuleSelect = (moduleId: string, subModuleId: string) => {
-    const selectedModule = MOCK_COURSE.modules.find(m => m.id === moduleId)
-    const selectedSubModule = selectedModule?.subModules.find(sm => sm.id === subModuleId)
+    if (!course) return
+    
+    const selectedModule = course.modules.find((m: any) => m.id === moduleId)
+    const selectedSubModule = selectedModule?.subModules.find((sm: any) => sm.id === subModuleId)
     
     if (selectedModule && selectedSubModule) {
       setActiveView('submodule')
@@ -62,10 +211,15 @@ export default function CoursePage() {
   }
 
   const handleTakeQuiz = (moduleId: string) => {
-    const quizModule = MOCK_COURSE.modules.find(m => m.id === moduleId)
-    if (quizModule) {
+    if (!course) return
+    
+    const quizModule = course.modules.find((m: any) => m.id === moduleId)
+    
+    if (quizModule && quizModule.quiz && quizModule.quiz.questions && quizModule.quiz.questions.length > 0) {
       setCurrentQuiz(quizModule)
       setIsQuizOpen(true)
+    } else {
+      alert('No quiz questions available for this module.')
     }
   }
 
@@ -122,20 +276,28 @@ export default function CoursePage() {
       handleModuleSelect(activeModule.id)
     } else if (activeView === 'assessment') {
       // Go to last module
-      const lastModule = MOCK_COURSE.modules[MOCK_COURSE.modules.length - 1]
-      handleModuleSelect(lastModule.id)
+      if (course && course.modules.length > 0) {
+        const lastModule = course.modules[course.modules.length - 1]
+        handleModuleSelect(lastModule.id)
+      }
     }
   }
 
   const handleNext = () => {
+    if (!course) return
+
     if (activeView === 'overview') {
       // Go to first module
-      const firstModule = MOCK_COURSE.modules[0]
-      handleModuleSelect(firstModule.id)
+      const firstModule = course.modules[0]
+      if (firstModule) {
+        handleModuleSelect(firstModule.id)
+      }
     } else if (activeView === 'module' && activeModule) {
       // Go to first sub-module of current module
       const firstSubModule = activeModule.subModules[0]
-      handleSubModuleSelect(activeModule.id, firstSubModule.id)
+      if (firstSubModule) {
+        handleSubModuleSelect(activeModule.id, firstSubModule.id)
+      }
     } else if (activeView === 'submodule' && activeModule && activeSubModule) {
       // Find current sub-module index
       const currentSubModuleIndex = activeModule.subModules.findIndex(sm => sm.id === activeSubModule.id)
@@ -150,11 +312,11 @@ export default function CoursePage() {
       }
     } else if (activeView === 'quiz' && activeModule) {
       // Find current module index
-      const currentModuleIndex = MOCK_COURSE.modules.findIndex(m => m.id === activeModule.id)
+      const currentModuleIndex = course.modules.findIndex((m: any) => m.id === activeModule.id)
       
-      if (currentModuleIndex < MOCK_COURSE.modules.length - 1) {
+      if (currentModuleIndex < course.modules.length - 1) {
         // Go to next module
-        const nextModule = MOCK_COURSE.modules[currentModuleIndex + 1]
+        const nextModule = course.modules[currentModuleIndex + 1]
         handleModuleSelect(nextModule.id)
       } else {
         // Go to final assessment
@@ -177,7 +339,7 @@ export default function CoursePage() {
   const handleBreadcrumbClick = (breadcrumb: string) => {
     if (breadcrumb === 'Home') {
       router.push('/')
-    } else if (breadcrumb === MOCK_COURSE.name) {
+    } else if (course && breadcrumb === course.name) {
       handleModuleSelect('overview')
     } else if (activeModule && breadcrumb === activeModule.title) {
       handleModuleSelect(activeModule.id)
@@ -187,13 +349,44 @@ export default function CoursePage() {
     }
   }
 
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-sky-100 via-sky-50 to-white">
+        <div className="flex h-screen items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mx-auto"></div>
+            <p className="mt-4 text-slate-600">Loading course...</p>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (!course) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-sky-100 via-sky-50 to-white">
+        <div className="flex h-screen items-center justify-center">
+          <div className="text-center">
+            <p className="text-slate-600">Course not found</p>
+            <button 
+              onClick={() => router.push('/')}
+              className="mt-4 text-sky-600 hover:text-sky-700"
+            >
+              Go Home
+            </button>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-sky-100 via-sky-50 to-white">
       <div className="flex h-screen">
         {/* Left Sidebar - 25% width */}
         <div className="w-1/4 min-w-[300px]">
           <CourseSidebar
-            course={MOCK_COURSE}
+            course={course}
             activeModule={activeModule?.id || activeView}
             activeSubModule={activeSubModule?.id}
             onModuleSelect={handleModuleSelect}
@@ -229,10 +422,10 @@ export default function CoursePage() {
                   </button>
                   <span>&gt;</span>
                   <button 
-                    onClick={() => handleBreadcrumbClick(MOCK_COURSE.name)}
+                    onClick={() => handleBreadcrumbClick(course.name)}
                     className="hover:text-slate-900 transition-colors"
                   >
-                    {MOCK_COURSE.name}
+                    {course.name}
                   </button>
                   <span>&gt;</span>
                   <span className="text-slate-900">
@@ -241,15 +434,19 @@ export default function CoursePage() {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => {
-                    // TODO: Implement publish functionality
-                    alert('Course published! It will now appear in the Browse section.')
-                  }}
-                  className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Publish Course
-                </button>
+                {!isPublished ? (
+                  <Button 
+                    onClick={handlePublish}
+                    disabled={publishing}
+                    className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {publishing ? 'Publishing...' : 'Publish Course'}
+                  </Button>
+                ) : (
+                  <span className="text-green-600 text-sm font-medium">
+                    ✓ Published
+                  </span>
+                )}
                 <button 
                   onClick={handleNext}
                   disabled={activeView === 'assessment'}
@@ -268,7 +465,7 @@ export default function CoursePage() {
           {/* Main Content */}
           <CourseContent
             activeView={activeView}
-            course={MOCK_COURSE}
+            course={course}
             activeModule={activeModule}
             activeSubModule={activeSubModule}
             onTakeQuiz={handleTakeQuiz}

@@ -1,37 +1,47 @@
 'use client'
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export function ClaudeChat() {
   const [prompt, setPrompt] = useState('')
   const [response, setResponse] = useState('')
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/claude`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/claude`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt })
       })
       
       const data = await res.json()
-
+      
       setResponse(data.content)
 
       try {
-        const storeRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/course`, {
+        const storeRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/course`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ courseJson: data.content })
         })
         
         const storeData = await storeRes.json()
-        console.log('Store response:', storeData) 
+        console.log('Store response data:', storeData)
         
+        // Redirect directly to the course page after successful course creation
+        if (storeData.courseId) {
+          console.log('Redirecting to course:', storeData.courseId)
+          router.push(`/course/${storeData.courseId}`)
+        } else {
+          console.log('No courseId found, redirecting to browse')
+          router.push('/browse')
+        }
 
       } catch (storeError) {
         console.error('Store error:', storeError)
@@ -51,7 +61,7 @@ export function ClaudeChat() {
         <input 
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="What course do you want to build"
+          placeholder="Tell us what you want to teach..."
           className="px-4 py-2 border rounded-lg"
           disabled={loading}
         />

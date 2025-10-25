@@ -7,27 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loading } from "@/components/ui/loading"
 import { useLoading } from "@/lib/loading-context"
+import { ClaudeChat } from "@/components/claude-chat"
 
 export default function CourseBuilderPage() {
-  const [prompt, setPrompt] = useState("")
-  const router = useRouter()
   const { isLoading, setIsLoading } = useLoading()
 
   // Reset loading state when component mounts (when navigating back to home)
   useEffect(() => {
     setIsLoading(false)
   }, [setIsLoading])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (prompt.trim()) {
-      setIsLoading(true)
-      // Simple loading with redirect after 3 seconds
-      setTimeout(() => {
-        router.push('/course/mock-course')
-      }, 3000)
-    }
-  }
 
   return (
     <main className="min-h-screen relative overflow-hidden">
@@ -52,24 +40,9 @@ export default function CourseBuilderPage() {
                 </div>
 
                 <div className="opacity-0 animate-fade-in-up animate-delay-400">
-                  <form onSubmit={handleSubmit} className="max-w-lg mx-auto">
-                    <div className="flex items-center gap-3 rounded-2xl border border-slate-300 bg-white px-3 py-2 shadow-sm">
-                      <Input
-                        type="text"
-                        placeholder="Tell us what you want to teach..."
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        required
-                        className="flex-1 bg-transparent text-slate-900 placeholder:text-slate-500 focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-1 text-base hover:placeholder:text-slate-600 transition-all duration-300 h-auto"
-                      />
-                      <Button
-                        type="submit"
-                        className="rounded-full px-3 py-2 bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors duration-200 shadow-none"
-                      >
-                        →
-                      </Button>
-                    </div>
-                  </form>
+                  <div className="max-w-lg mx-auto">
+                    <ClaudeChat />
+                  </div>
                 </div>
               </div>
             </>

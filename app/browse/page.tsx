@@ -1,9 +1,58 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { CourseCard } from "@/components/ui/course-card"
-import { PUBLISHED_COURSES } from "@/lib/mock-data"
+import { supabase } from "@/utils/supabase"
+
+interface Course {
+  id: string;
+  title: string;
+  summary: string;
+  created_at: string;
+}
 
 export default function BrowsePage() {
+  const [courses, setCourses] = useState<Course[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchPublishedCourses = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('courses')
+          .select('*')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error('Error fetching courses:', error)
+        } else {
+          setCourses(data || [])
+        }
+      } catch (error) {
+        console.error('Error fetching courses:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPublishedCourses()
+  }, [])
+
+  if (loading) {
+    return (
+      <main className="min-h-screen relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-100 via-sky-50 to-white" />
+        <div className="relative z-10 min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mx-auto"></div>
+            <p className="mt-4 text-slate-600">Loading courses...</p>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen relative overflow-hidden">
       {/* Background Gradient */}
@@ -24,16 +73,28 @@ export default function BrowsePage() {
 
           {/* Course Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {PUBLISHED_COURSES.map((course) => (
+            {courses.map((course) => (
               <CourseCard
                 key={course.id}
-                course={course}
+                course={{
+                  id: course.id,
+                  name: course.title,
+                  learningObjectives: [],
+                  modules: [],
+                  finalAssessment: {
+                    title: "",
+                    description: "",
+                    arInstructions: [],
+                    metaRayBansIntegration: false
+                  },
+                  createdAt: course.created_at
+                }}
               />
             ))}
           </div>
 
           {/* Empty State (if no courses) */}
-          {PUBLISHED_COURSES.length === 0 && (
+          {courses.length === 0 && (
             <div className="text-center py-12">
               <div className="text-slate-400 mb-4">
                 <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
