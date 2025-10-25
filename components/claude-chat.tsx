@@ -35,7 +35,6 @@ export function ClaudeChat() {
 
       } catch (storeError) {
         console.error('Store error:', storeError)
-        setResponse(prev => prev + `\n\n❌ Store error: ${storeError}`)
       }
     } catch (error) {
       console.error('Main error:', error)

@@ -1,14 +1,12 @@
--- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Profiles table
 CREATE TABLE profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   username TEXT UNIQUE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Courses table
+
 CREATE TABLE courses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   owner_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
@@ -19,7 +17,7 @@ CREATE TABLE courses (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Modules table
+
 CREATE TABLE modules (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
@@ -29,7 +27,7 @@ CREATE TABLE modules (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Submodules table (child of module, exactly one of two kinds)
+
 CREATE TABLE submodules (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   module_id UUID REFERENCES modules(id) ON DELETE CASCADE,
@@ -40,7 +38,7 @@ CREATE TABLE submodules (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Quiz questions table (only for submodules.kind='quiz')
+
 CREATE TABLE quiz_questions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   submodule_id UUID REFERENCES submodules(id) ON DELETE CASCADE,
@@ -52,7 +50,7 @@ CREATE TABLE quiz_questions (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Question attempts table
+
 CREATE TABLE question_attempts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
@@ -62,7 +60,7 @@ CREATE TABLE question_attempts (
   is_correct BOOLEAN NOT NULL
 );
 
--- Question progress table
+
 CREATE TABLE question_progress (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
@@ -72,7 +70,7 @@ CREATE TABLE question_progress (
   last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Indexes for better performance
+
 CREATE INDEX idx_courses_owner_id ON courses(owner_id);
 CREATE INDEX idx_modules_course_id ON modules(course_id);
 CREATE INDEX idx_submodules_module_id ON submodules(module_id);

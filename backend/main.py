@@ -3,8 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import json
 import os
-from dotenv import load_dotenv; load_dotenv()
+from dotenv import load_dotenv
 from supabase import create_client
+
+load_dotenv()
 
 app = FastAPI(title="Foundry Course Builder API")
 
@@ -17,7 +19,10 @@ app.add_middleware(
 )
 
 def get_supabase_client():
-    return create_client(os.getenv("NEXT_PUBLIC_SUPABASE_URL"), os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY"))
+    url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+    return create_client(url, key)
 
 
 initial_prompt = """# Course Generation System Prompt
@@ -117,7 +122,7 @@ You are an expert course designer tasked with creating comprehensive educational
 
 ### Content Guidelines:
 - **Learning Objectives**: 4 clear, measurable goals
-- **Lesson Content**: 8-12 detailed paragraphs (300-400 words) explaining key concepts with:
+- **Lesson Content**: 1 detailed paragraphs (100-200 words) explaining key concepts with:
   - Comprehensive explanations of concepts
   - Real-world examples and applications
   - Step-by-step procedures where applicable
@@ -154,7 +159,6 @@ async def claude_chat(request: dict):
             raise HTTPException(status_code=400, detail="Prompt is required")
         
         async with httpx.AsyncClient(timeout=120.0) as client:
-            print("Sending request to Claude...")
             response = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -164,7 +168,7 @@ async def claude_chat(request: dict):
                 },
                 json={
                     "model": "claude-sonnet-4-20250514",
-                    "max_tokens": 20000,
+                    "max_tokens": 8000,
                     "messages": [
                         {
                             "role": "user",
@@ -176,14 +180,9 @@ async def claude_chat(request: dict):
                 },
             )
 
-
-
-        
         if response.status_code != 200:
-            print(response.text)
             raise HTTPException(status_code=500, detail=f"Claude API error: {response.status_code} - {response.text}")
 
-        
         data = response.json()
         return {"content": data["content"][0]["text"], "usage": data.get("usage")}
         
@@ -195,18 +194,21 @@ async def parse_course(request: dict):
     try:
         course_json = request.get("courseJson")
         if not course_json:
-            raise HTTPException(status_code=400, detail="courseJson is required")
-        
-
+            raise HTTPException(status_code=400, detail="courseJson is required")   
         clean_json = course_json
         if '```json' in clean_json:
             clean_json = clean_json.replace('```json', '').replace('```', '')
         if '```' in clean_json:
             clean_json = clean_json.replace('```', '')
-
-        course_data = json.loads(clean_json)
         
+        try:
+            course_data = json.loads(clean_json)
+        except json.JSONDecodeError as e:
+
+            raise HTTPException(status_code=500, detail=f"Invalid JSON: {str(e)}")
+
         course = await parse_and_store_course(course_data)
+       
         
         return {"success": True, "courseId": course["id"], "message": "Course created successfully"}
         
@@ -214,80 +216,72 @@ async def parse_course(request: dict):
         raise HTTPException(status_code=500, detail=f"Failed to parse course data: {str(e)}")
 
 async def parse_and_store_course(course_data):
-    supabase = get_supabase_client()
-    
-    course_response = supabase.table("courses").insert({
-        "title": course_data["name"],
-        "summary": f"Generated course: {course_data['name']}",
-        "meta": {
-            "slug": course_data["id"],
-            "learningObjectives": course_data["learningObjectives"],
-            "finalAssessment": course_data["finalAssessment"],
-            "createdAt": course_data["createdAt"]
-        }
-    }).execute()
-    
-    if course_response.data:
-        course = course_response.data[0]
-        course_id = course["id"]
+    try:
+
+        supabase = get_supabase_client()
+
+        # Insert course
+        course_response = supabase.table("courses").insert({
+            "title": course_data["name"],
+            "summary": f"Generated course: {course_data['name']}",
+
+        }).execute()
         
-        for module_idx, module in enumerate(course_data["modules"]):
-            module_response = supabase.table("modules").insert({
-                "course_id": course_id,
-                "idx": module_idx,
-                "title": module["title"],
-                "summary": f"Module {module_idx + 1}: {module['title']}",
-                "meta": {
-                    "slug": module["id"],
-                    "isSafetyCheck": module["isSafetyCheck"]
-                }
-            }).execute()
+        if course_response.data:
+            course = course_response.data[0]
+            course_id = course["id"]
             
-            if module_response.data:
-                module_id = module_response.data[0]["id"]
+            # Insert modules
+            for module_idx, module in enumerate(course_data["modules"]):
+                module_response = supabase.table("modules").insert({
+                    "course_id": course_id,
+                    "idx": module_idx,
+                    "title": module["title"],
+                    "summary": f"Module {module_idx + 1}: {module['title']}",
+                }).execute()
                 
-                for sub_idx, submodule in enumerate(module["subModules"]):
-                    supabase.table("submodules").insert({
-                        "module_id": module_id,
-                        "idx": sub_idx,
-                        "kind": "instruction",
-                        "title": submodule["title"],
-                        "body": submodule["content"]["text"],
-                        "meta": {
-                            "slug": submodule["id"],
-                            "aiGeneratedImage": submodule["content"]["aiGeneratedImage"]
-                        }
-                    }).execute()
-                
-                if module.get("quiz") and module["quiz"].get("questions"):
-                    quiz_response = supabase.table("submodules").insert({
-                        "module_id": module_id,
-                        "idx": len(module["subModules"]),
-                        "kind": "quiz",
-                        "title": f"Quiz: {module['title']}",
-                        "body": f"Quiz for {module['title']}",
-                        "meta": {
-                            "slug": module["quiz"]["id"]
-                        }
-                    }).execute()
+                if module_response.data:
+                    module_id = module_response.data[0]["id"]
                     
-                    if quiz_response.data:
-                        quiz_id = quiz_response.data[0]["id"]
+                    # Insert submodules
+                    for sub_idx, submodule in enumerate(module["subModules"]):
+                        supabase.table("submodules").insert({
+                            "module_id": module_id,
+                            "idx": sub_idx,
+                            "kind": "instruction",
+                            "title": submodule["title"],
+                            "body": submodule["content"]["text"],
+                        }).execute()
+                    
+                    # Insert quiz if exists
+                    if module.get("quiz") and module["quiz"].get("questions"):
+                        quiz_response = supabase.table("submodules").insert({
+                            "module_id": module_id,
+                            "idx": len(module["subModules"]),
+                            "kind": "quiz",
+                            "title": f"Quiz: {module['title']}",
+                            "body": f"Quiz for {module['title']}",
+                        }).execute()
                         
-                        # Insert quiz questions
-                        for q_idx, question in enumerate(module["quiz"]["questions"]):
-                            supabase.table("quiz_questions").insert({
-                                "submodule_id": quiz_id,
-                                "idx": q_idx,
-                                "type": "multiple_choice",
-                                "prompt": question["question"],
-                                "options": question["options"],
-                                "answer": str(question["correctAnswer"])
-                            }).execute()
-        
-        return course
-    
-    raise Exception("Failed to create course")
+                        if quiz_response.data:
+                            quiz_id = quiz_response.data[0]["id"]
+                            
+                            # Insert quiz questions
+                            for q_idx, question in enumerate(module["quiz"]["questions"]):
+                                supabase.table("quiz_questions").insert({
+                                    "submodule_id": quiz_id,
+                                    "idx": q_idx,
+                                    "type": "multiple_choice",
+                                    "prompt": question["question"],
+                                    "options": question["options"],
+                                    "answer": str(question["correctAnswer"])
+                                }).execute()
+            
+            return course
+        else:
+            raise Exception("Failed to create course")
+    except Exception as e:
+        raise e
 
 if __name__ == "__main__":
     import uvicorn
