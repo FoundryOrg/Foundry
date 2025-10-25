@@ -1,12 +1,12 @@
 CREATE TABLE profiles (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username TEXT UNIQUE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 
 CREATE TABLE courses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   summary TEXT,
@@ -18,7 +18,7 @@ CREATE TABLE courses (
 
 
 CREATE TABLE modules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
   idx INTEGER NOT NULL, -- Order within course
   title TEXT NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE modules (
 
 
 CREATE TABLE submodules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   module_id UUID REFERENCES modules(id) ON DELETE CASCADE,
   idx INTEGER NOT NULL, -- Order within module
   kind TEXT NOT NULL CHECK (kind IN ('instruction', 'quiz')),
@@ -39,7 +39,7 @@ CREATE TABLE submodules (
 
 
 CREATE TABLE quiz_questions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   submodule_id UUID REFERENCES submodules(id) ON DELETE CASCADE,
   idx INTEGER NOT NULL, -- Order within submodule
   type TEXT NOT NULL,
@@ -51,7 +51,7 @@ CREATE TABLE quiz_questions (
 
 
 CREATE TABLE question_attempts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   submodule_id UUID REFERENCES submodules(id) ON DELETE CASCADE,
   submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -61,7 +61,7 @@ CREATE TABLE question_attempts (
 
 
 CREATE TABLE question_progress (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   submodule_id UUID REFERENCES submodules(id) ON DELETE CASCADE,
   tries INTEGER DEFAULT 0,
