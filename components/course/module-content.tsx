@@ -63,7 +63,7 @@ export function ModuleContent({ module, onTakeQuiz }: ModuleContentProps) {
             </span>
           </div>
           <p className="text-slate-700 mb-6">
-            Test your understanding of all concepts covered in this module's lessons.
+            Test your understanding of all concepts covered in this module&apos;s lessons.
           </p>
           <Button 
             onClick={onTakeQuiz}

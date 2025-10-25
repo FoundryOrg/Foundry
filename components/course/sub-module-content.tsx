@@ -1,6 +1,7 @@
 "use client"
 
 import { SubModule } from "@/lib/types"
+import Image from "next/image"
 
 interface SubModuleContentProps {
   subModule: SubModule;
@@ -32,9 +33,11 @@ export function SubModuleContent({ subModule }: SubModuleContentProps) {
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h2 className="text-xl font-semibold text-slate-900 mb-4">Visual Learning</h2>
           <div className="relative">
-            <img 
+            <Image 
               src={subModule.content.aiGeneratedImage} 
               alt={`${subModule.title} illustration`}
+              width={500}
+              height={192}
               className="w-full h-48 object-cover rounded-lg"
             />
             <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs text-slate-600">
