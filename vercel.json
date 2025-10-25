@@ -1,0 +1,9 @@
+# For Vercel deployment - Frontend only
+# This file tells Vercel how to build your Next.js app
+
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "installCommand": "npm install"
+}

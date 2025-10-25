@@ -76,38 +76,6 @@ Create a course about: """
 def read_root():
     return {"message": "Foundry Course Builder API"}
 
-@app.post("/api/generate-image")
-async def generate_image(request: dict):
-    try:
-        prompt = request.get("prompt")
-        if not prompt:
-            raise HTTPException(status_code=400, detail="Prompt is required")
-        
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/images/generations",
-                headers={
-                    "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "dall-e-3",
-                    "prompt": f"Professional educational illustration: {prompt}. Clean, modern, suitable for online learning.",
-                    "n": 1,
-                    "size": "1024x1024",
-                    "quality": "standard"
-                },
-            )
-
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"OpenAI API error: {response.status_code} - {response.text}")
-
-        data = response.json()
-        return {"image_url": data["data"][0]["url"]}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image generation error: {str(e)}")
-
 @app.post("/api/claude")
 async def claude_chat(request: dict):
     try:
