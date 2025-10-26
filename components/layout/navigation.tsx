@@ -2,13 +2,11 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useLoading } from "@/lib/loading-context"
 
 export default function Navigation() {
   const pathname = usePathname()
-  const { isLoading } = useLoading()
 
-  if (isLoading || pathname.startsWith('/course/')) {
+  if (pathname.startsWith('/course/')) {
     return null
   }
 

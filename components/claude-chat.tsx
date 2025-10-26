@@ -2,16 +2,23 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { useLoading } from "@/lib/loading-context"
 
 export function ClaudeChat() {
   const [prompt, setPrompt] = useState('')
   const [response, setResponse] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const { setIsLoading } = useLoading()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!prompt.trim()) return
+    
     setLoading(true)
+    setIsLoading(true)
     
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/claude`, {
@@ -45,10 +52,12 @@ export function ClaudeChat() {
 
       } catch (storeError) {
         console.error('Store error:', storeError)
+        setIsLoading(false)
       }
     } catch (error) {
       console.error('Main error:', error)
       setResponse('Error: ' + error)
+      setIsLoading(false)
     }
     
     
@@ -56,24 +65,25 @@ export function ClaudeChat() {
   }
 
   return (
-    <div className="w-full max-w-2xl">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full">
-        <input 
+    <form onSubmit={handleSubmit} className="max-w-lg mx-auto">
+      <div className="flex items-center gap-3 rounded-2xl border border-slate-300 bg-white px-3 py-2 shadow-sm">
+        <Input
+          type="text"
+          placeholder="What course would you like to make?"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Tell us what you want to teach..."
-          className="px-4 py-2 border rounded-lg"
+          required
           disabled={loading}
+          className="flex-1 bg-transparent text-slate-900 placeholder:text-slate-500 focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-1 text-base hover:placeholder:text-slate-600 transition-all duration-300 h-auto border-0"
         />
-        <button 
-          type="submit" 
+        <Button
+          type="submit"
           disabled={loading}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg disabled:opacity-50"
+          className="rounded-full px-3 py-2 bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors duration-200 shadow-none"
         >
-          {loading ? 'generating...' : 'Send to Claude'}
-        </button>
-      </form>
-    
-    </div>
+          →
+        </Button>
+      </div>
+    </form>
   )
 }
