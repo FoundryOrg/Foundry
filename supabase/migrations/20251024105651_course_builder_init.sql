@@ -34,6 +34,7 @@ CREATE TABLE submodules (
   kind TEXT NOT NULL CHECK (kind IN ('instruction', 'quiz')),
   title TEXT NOT NULL,
   body TEXT,
+  image_url TEXT, 
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
