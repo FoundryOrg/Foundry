@@ -63,11 +63,12 @@ CREATE TABLE question_attempts (
 
 CREATE TABLE question_progress (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
   submodule_id UUID REFERENCES submodules(id) ON DELETE CASCADE,
   tries INTEGER DEFAULT 0,
   is_completed BOOLEAN DEFAULT FALSE,
-  last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, submodule_id) 
 );
 
 

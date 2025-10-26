@@ -8,6 +8,7 @@ import { QuizModal } from "@/components/ui/quiz-modal"
 import { Button } from "@/components/ui/button"
 import { ActiveView, Module, SubModule } from "@/lib/types"
 import { supabase } from "@/utils/supabase"
+import { getUserId } from "@/lib/user-id"
 
 export default function CoursePage() {
   const router = useRouter()
@@ -130,6 +131,41 @@ export default function CoursePage() {
         }
 
         setCourse(courseObject)
+        
+        // Load user progress
+        const userId = getUserId()
+        if (userId) {
+          const { data: progressData } = await supabase
+            .from('question_progress')
+            .select('submodule_id, is_completed')
+            .eq('user_id', userId)
+          
+          if (progressData) {
+            const completedIds = progressData
+              .filter(p => p.is_completed)
+              .map(p => p.submodule_id)
+            setCompletedSubModules(completedIds)
+            
+            // Check which modules should be marked complete based on progress
+            const completedModuleIds: string[] = []
+            modulesWithContent.forEach((module: any) => {
+              // Check if all instruction submodules are complete
+              const allSubModulesComplete = module.subModules.every((sm: any) => 
+                completedIds.includes(sm.id)
+              )
+              
+              // Check if quiz is complete (if module has a quiz)
+              const quizComplete = module.quiz ? completedIds.includes(module.quiz.id) : true
+              
+              // If both conditions met, module is complete
+              if (allSubModulesComplete && quizComplete) {
+                completedModuleIds.push(module.id)
+              }
+            })
+            
+            setCompletedModules(completedModuleIds)
+          }
+        }
       } catch (error) {
         console.error('Error fetching course data:', error)
       } finally {
@@ -192,7 +228,7 @@ export default function CoursePage() {
     }
   }
 
-  const handleSubModuleSelect = (moduleId: string, subModuleId: string) => {
+  const handleSubModuleSelect = async (moduleId: string, subModuleId: string) => {
     if (!course) return
     
     const selectedModule = course.modules.find((m: any) => m.id === moduleId)
@@ -203,9 +239,22 @@ export default function CoursePage() {
       setActiveModule(selectedModule)
       setActiveSubModule(selectedSubModule)
       
-      // Mark sub-module as completed when viewed (for demo purposes)
+      // Mark sub-module as completed when viewed
       if (!completedSubModules.includes(subModuleId)) {
         setCompletedSubModules(prev => [...prev, subModuleId])
+        
+        // Save progress to database
+        const userId = getUserId()
+        if (userId) {
+          await supabase.from('question_progress').upsert({
+            user_id: userId,
+            submodule_id: subModuleId,
+            is_completed: true,
+            tries: 0
+          }, {
+            onConflict: 'user_id,submodule_id'
+          })
+        }
       }
     }
   }
@@ -223,7 +272,7 @@ export default function CoursePage() {
     }
   }
 
-  const handleQuizSubmit = (answers: string[]) => {
+  const handleQuizSubmit = async (answers: string[]) => {
     if (currentQuiz) {
       // Simple scoring logic
       let correctAnswers = 0
@@ -233,15 +282,33 @@ export default function CoursePage() {
         }
       })
       
-      // If they got at least 70% correct, check if all sub-modules are completed
-      if (correctAnswers / currentQuiz.quiz.questions.length >= 0.7) {
-        // Check if all sub-modules for this module are completed
+      const passed = correctAnswers / currentQuiz.quiz.questions.length >= 0.7
+      
+      // Save quiz completion to database
+      const userId = getUserId()
+      if (userId && currentQuiz.quiz) {
+        await supabase.from('question_progress').upsert({
+          user_id: userId,
+          submodule_id: currentQuiz.quiz.id,
+          is_completed: passed,
+          tries: 1
+        })
+        
+        // If quiz passed, mark it as completed submodule
+        if (passed && !completedSubModules.includes(currentQuiz.quiz.id)) {
+          setCompletedSubModules(prev => [...prev, currentQuiz.quiz.id])
+        }
+      }
+      
+      // If they passed the quiz
+      if (passed) {
+
         const allSubModulesCompleted = currentQuiz.subModules.every(subModule => 
           completedSubModules.includes(subModule.id)
         )
         
-        // Only mark module as completed if all sub-modules are done AND quiz is passed
-        if (allSubModulesCompleted) {
+        // Quiz is now completed, so check if module should be complete
+        if (allSubModulesCompleted && currentQuiz.quiz) {
           setCompletedModules(prev => [...prev, currentQuiz.id])
         }
       }

@@ -152,7 +152,7 @@ export type Database = {
           last_seen_at: string | null
           submodule_id: string | null
           tries: number | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           id?: string
@@ -160,7 +160,7 @@ export type Database = {
           last_seen_at?: string | null
           submodule_id?: string | null
           tries?: number | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           id?: string
@@ -168,7 +168,7 @@ export type Database = {
           last_seen_at?: string | null
           submodule_id?: string | null
           tries?: number | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -176,13 +176,6 @@ export type Database = {
             columns: ["submodule_id"]
             isOneToOne: false
             referencedRelation: "submodules"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "question_progress_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
