@@ -8,8 +8,17 @@ from supabase import create_client
 import google.generativeai as genai
 import base64
 from io import BytesIO
+from datetime import datetime, timedelta
+import jwt
+from typing import Optional
+import logging
+import traceback
 
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Foundry Course Builder API")
 
@@ -223,7 +232,9 @@ async def parse_course(request: dict):
     try:
         course_json = request.get("courseJson")
         if not course_json:
-            raise HTTPException(status_code=400, detail="courseJson is required")   
+            raise HTTPException(status_code=400, detail="courseJson is required")
+        
+        logger.info("Parsing course JSON...")
         clean_json = course_json
         if '```json' in clean_json:
             clean_json = clean_json.replace('```json', '').replace('```', '')
@@ -232,24 +243,35 @@ async def parse_course(request: dict):
         
         try:
             course_data = json.loads(clean_json)
+            logger.info(f"Course data parsed successfully: {course_data.get('name', 'Unknown')}")
         except json.JSONDecodeError as e:
-
-            raise HTTPException(status_code=500, detail=f"Invalid JSON: {str(e)}")
+            logger.error(f"JSON decode error: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
 
         course = await parse_and_store_course(course_data)
-       
+        logger.info(f"Course created successfully with ID: {course['id']}")
         
         return {"success": True, "courseId": course["id"], "message": "Course created successfully"}
         
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to parse course data: {str(e)}")
+        logger.error(f"Error in parse_course: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to create course: {str(e)}")
 
 async def parse_and_store_course(course_data):
     try:
-
+        logger.info("Connecting to Supabase...")
         supabase = get_supabase_client()
 
+        # Validate required fields
+        if "name" not in course_data:
+            raise ValueError("Course data missing 'name' field")
+        if "modules" not in course_data or not course_data["modules"]:
+            raise ValueError("Course data missing 'modules' field or modules array is empty")
 
+        logger.info(f"Creating course: {course_data['name']}")
         course_response = supabase.table("courses").insert({
             "title": course_data["name"],
             "summary": f"Generated course: {course_data['name']}",
@@ -260,62 +282,88 @@ async def parse_and_store_course(course_data):
             }
         }).execute()
         
-        if course_response.data:
-            course = course_response.data[0]
-            course_id = course["id"]
-            
+        if not course_response.data:
+            raise Exception(f"Supabase returned no data when creating course. Response: {course_response}")
+        
+        course = course_response.data[0]
+        course_id = course["id"]
+        logger.info(f"Course created with ID: {course_id}")
+        
 
-            for module_idx, module in enumerate(course_data["modules"]):
-                module_response = supabase.table("modules").insert({
-                    "course_id": course_id,
-                    "idx": module_idx,
-                    "title": module["title"],
-                    "summary": f"Module {module_idx + 1}: {module['title']}",
+        for module_idx, module in enumerate(course_data["modules"]):
+            logger.info(f"Creating module {module_idx + 1}: {module.get('title', 'Untitled')}")
+            
+            if "title" not in module:
+                raise ValueError(f"Module {module_idx} missing 'title' field")
+            
+            module_response = supabase.table("modules").insert({
+                "course_id": course_id,
+                "idx": module_idx,
+                "title": module["title"],
+                "summary": f"Module {module_idx + 1}: {module['title']}",
+            }).execute()
+            
+            if not module_response.data:
+                raise Exception(f"Failed to create module {module_idx}: {module['title']}")
+            
+            module_id = module_response.data[0]["id"]
+
+            for sub_idx, submodule in enumerate(module.get("subModules", [])):
+                logger.info(f"  Creating submodule {sub_idx + 1}: {submodule.get('title', 'Untitled')}")
+                
+                # Get image URL from content if it exists
+                image_url = submodule.get("content", {}).get("aiGeneratedImage", None)
+                content_text = submodule.get("content", {}).get("text", "")
+                
+                if not submodule.get("title"):
+                    raise ValueError(f"Submodule {sub_idx} in module {module_idx} missing 'title' field")
+                
+                supabase.table("submodules").insert({
+                    "module_id": module_id,
+                    "idx": sub_idx,
+                    "kind": "instruction",
+                    "title": submodule["title"],
+                    "body": content_text,
+                    "image_url": image_url
+                }).execute()
+            
+            # Create quiz for the module (outside submodule loop)
+            if module.get("quiz") and module["quiz"].get("questions"):
+                logger.info(f"  Creating quiz for module: {module['title']}")
+                quiz_response = supabase.table("submodules").insert({
+                    "module_id": module_id,
+                    "idx": len(module.get("subModules", [])),
+                    "kind": "quiz",
+                    "title": f"Quiz: {module['title']}",
+                    "body": f"Quiz for {module['title']}",
                 }).execute()
                 
-                if module_response.data:
-                    module_id = module_response.data[0]["id"]
-
-                    for sub_idx, submodule in enumerate(module["subModules"]):
-                        # Get image URL from content if it exists
-                        image_url = submodule.get("content", {}).get("aiGeneratedImage", None)
-                        
-                        supabase.table("submodules").insert({
-                            "module_id": module_id,
-                            "idx": sub_idx,
-                            "kind": "instruction",
-                            "title": submodule["title"],
-                            "body": submodule["content"]["text"],
-                            "image_url": image_url
+                if quiz_response.data:
+                    quiz_id = quiz_response.data[0]["id"]
+                    
+                    for q_idx, question in enumerate(module["quiz"]["questions"]):
+                        supabase.table("quiz_questions").insert({
+                            "submodule_id": quiz_id,
+                            "idx": q_idx,
+                            "type": "multiple_choice",
+                            "prompt": question.get("question", ""),
+                            "options": question.get("options", []),
+                            "answer": str(question.get("correctAnswer", 0))
                         }).execute()
-                
-                    if module.get("quiz") and module["quiz"].get("questions"):
-                        quiz_response = supabase.table("submodules").insert({
-                            "module_id": module_id,
-                            "idx": len(module["subModules"]),
-                            "kind": "quiz",
-                            "title": f"Quiz: {module['title']}",
-                            "body": f"Quiz for {module['title']}",
-                        }).execute()
-                        
-                        if quiz_response.data:
-                            quiz_id = quiz_response.data[0]["id"]
-                            
-                            for q_idx, question in enumerate(module["quiz"]["questions"]):
-                                supabase.table("quiz_questions").insert({
-                                    "submodule_id": quiz_id,
-                                    "idx": q_idx,
-                                    "type": "multiple_choice",
-                                    "prompt": question["question"],
-                                    "options": question["options"],
-                                    "answer": str(question["correctAnswer"])
-                                }).execute()
-            
-            return course
-        else:
-            raise Exception("Failed to create course")
+        
+        logger.info(f"Course {course_id} created successfully with all modules")
+        return course
+        
+    except KeyError as e:
+        logger.error(f"Missing required field in course data: {str(e)}")
+        raise ValueError(f"Missing required field in course data: {str(e)}")
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise
     except Exception as e:
-        raise e
+        logger.error(f"Error in parse_and_store_course: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise Exception(f"Database error while storing course: {str(e)}")
 
 @app.get("/api/course/{courseId}/voice-prompt")
 async def getVoicePrompt(courseId: str):
@@ -354,6 +402,173 @@ async def getVoicePrompt(courseId: str):
                 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating voice prompt: {str(e)}")
+
+
+# ---------------------------------------
+# LiveKit Connection Route
+# ---------------------------------------
+
+def create_participant_token(
+    identity: str,
+    name: str,
+    room_name: str,
+    agent_name: Optional[str] = None
+) -> str:
+    """Create a LiveKit access token for a participant"""
+    api_key = os.getenv("LIVEKIT_API_KEY")
+    api_secret = os.getenv("LIVEKIT_API_SECRET")
+    
+    if not api_key or not api_secret:
+        raise ValueError("LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set")
+    
+    # Create JWT token
+    now = datetime.utcnow()
+    exp = now + timedelta(minutes=15)
+    
+    claims = {
+        "exp": int(exp.timestamp()),
+        "iss": api_key,
+        "nbf": int(now.timestamp()),
+        "sub": identity,
+        "name": name,
+        "video": {
+            "room": room_name,
+            "roomJoin": True,
+            "canPublish": True,
+            "canPublishData": True,
+            "canSubscribe": True,
+        }
+    }
+    
+    # Add room configuration with agent if provided
+    if agent_name:
+        claims["roomConfig"] = {
+            "agents": [{"agentName": agent_name}]
+        }
+    
+    token = jwt.encode(claims, api_secret, algorithm="HS256")
+    return token
+
+
+@app.post("/api/connection-details")
+async def connection_details(request: dict):
+    """
+    Generate LiveKit connection details for the frontend.
+    This endpoint creates a room and participant token.
+    """
+    try:
+        livekit_url = os.getenv("LIVEKIT_URL")
+        if not livekit_url:
+            raise HTTPException(status_code=500, detail="LIVEKIT_URL is not configured")
+        
+        # Parse agent configuration from request body
+        room_config = request.get("room_config", {})
+        agents = room_config.get("agents", [])
+        agent_name = agents[0].get("agent_name") if agents else None
+        
+        # Generate participant details
+        participant_name = "user"
+        participant_identity = f"voice_assistant_user_{int(datetime.utcnow().timestamp() * 1000) % 10000}"
+        room_name = f"voice_assistant_room_{int(datetime.utcnow().timestamp() * 1000) % 10000}"
+        
+        # Create participant token
+        participant_token = create_participant_token(
+            identity=participant_identity,
+            name=participant_name,
+            room_name=room_name,
+            agent_name=agent_name
+        )
+        
+        return {
+            "serverUrl": livekit_url,
+            "roomName": room_name,
+            "participantToken": participant_token,
+            "participantName": participant_name,
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create connection details: {str(e)}")
+
+
+@app.post("/api/course/{courseId}/voice-session")
+async def create_course_voice_session(courseId: str):
+    """
+    Create a voice session specifically for a course's final assessment.
+    This fetches the course data and creates a customized agent session.
+    """
+    try:
+        livekit_url = os.getenv("LIVEKIT_URL")
+        if not livekit_url:
+            raise HTTPException(status_code=500, detail="LIVEKIT_URL is not configured")
+        
+        # Fetch course data
+        supabase = get_supabase_client()
+        response = supabase.table("courses").select("title, meta").eq("id", courseId).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Course not found")
+        
+        course = response.data[0]
+        meta = course.get("meta", {})
+        title = course.get("title", "Unknown Course")
+        final_assessment = meta.get("finalAssessment", {})
+        
+        # Format AR instructions as steps for the agent
+        ar_instructions = final_assessment.get("arInstructions", [])
+        description = final_assessment.get("description", "Complete the final project")
+        
+        # Convert to agent step format
+        steps = []
+        if ar_instructions:
+            for i, instruction in enumerate(ar_instructions):
+                steps.append({
+                    "title": f"Step {i+1}",
+                    "description": instruction
+                })
+        else:
+            # Fallback if no AR instructions
+            steps = [{
+                "title": "Complete Project",
+                "description": description
+            }]
+        
+        # Generate room metadata with course information
+        room_metadata = {
+            "courseId": courseId,
+            "courseTitle": title,
+            "steps": steps,
+            "description": description
+        }
+        
+        # Generate participant details
+        participant_name = "user"
+        participant_identity = f"course_{courseId}_user_{int(datetime.utcnow().timestamp() * 1000) % 10000}"
+        room_name = f"course_{courseId}_room_{int(datetime.utcnow().timestamp() * 1000) % 10000}"
+        
+        # Create participant token with agent
+        participant_token = create_participant_token(
+            identity=participant_identity,
+            name=participant_name,
+            room_name=room_name,
+            agent_name="teaching-assistant"
+        )
+        
+        return {
+            "serverUrl": livekit_url,
+            "roomName": room_name,
+            "participantToken": participant_token,
+            "participantName": participant_name,
+            "courseTitle": title,
+            "steps": steps,
+            "metadata": room_metadata
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create course voice session: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

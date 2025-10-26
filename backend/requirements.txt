@@ -1,7 +1,38 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-httpx>=0.24.0,<0.25.0
-supabase==2.0.0
-python-dotenv==1.0.0
+# --- Core ---
+python-dotenv
+asyncio
+
+# --- Web framework ---
+fastapi
+uvicorn[standard]
+httpx
+
+# --- Database / Supabase ---
+supabase
+postgrest
+gotrue
+storage3
+
+# --- LLM / AI integrations ---
+anthropic
 google-generativeai
-Pillow>=10.0.0
+livekit-agents
+livekit-plugins-google
+livekit-plugins-deepgram
+livekit-plugins-anthropic
+livekit-plugins-noise-cancellation
+
+# --- JWT / Security ---
+PyJWT
+
+# --- Data / Utils ---
+pydantic
+typing-extensions
+python-dateutil
+base58
+
+# --- Image handling ---
+Pillow
+
+# --- Optional (helpful during dev) ---
+requests
