@@ -14,7 +14,7 @@ export function ClaudeChat() {
     setLoading(true)
     
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/claude`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/claude`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt })
@@ -25,7 +25,7 @@ export function ClaudeChat() {
       setResponse(data.content)
 
       try {
-        const storeRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/course`, {
+        const storeRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/course`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ courseJson: data.content })

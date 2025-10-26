@@ -174,7 +174,7 @@ async def image_gen(claude_response: dict):
 
                                     content["aiGeneratedImage"] = f"data:image/png;base64,{img_base64}"
                                     image_found = True
-                                    print(f"✓ Image generated for: {lesson_title}")
+                                    print(f"Image generated for: {lesson_title}")
                                     break
                         
                         if not image_found:

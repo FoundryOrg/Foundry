@@ -19,7 +19,7 @@ export function FinalAssessment({ assessment, onComplete, completedModules = [] 
     try {
       
       // Fetch the voice prompt from the API
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/course/${courseId}/voice-prompt`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/course/${courseId}/voice-prompt`)
       const data = await response.json()
       
       if (data.voice_prompt) {
