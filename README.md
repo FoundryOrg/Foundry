@@ -1,6 +1,6 @@
 # Foundry
 
-AI-powered platform that turns a prompt into an interactive AR training course using Gemini, Supabase, and LiveKit.
+AI-powered platform that turns a prompt into an interactive AR training course using Gemini, Supabase, Livekit, and Snap Spectacles
 
 ## Installation
 
